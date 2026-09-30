@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Expense Buddy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; }
+        .modal-overlay { background: rgba(0,0,0,0.5); }
+        .slide-in { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .shake { animation: shake 0.5s; }
+        @keyframes shake { 0%,100%{ transform:translateX(0); } 25%{ transform:translateX(-5px); } 75%{ transform:translateX(5px); } }
+    </style>
+</head>
+<body class="bg-slate-50">
+
+    <!-- ==================== LOGIN PAGE ==================== -->
+    <div id="loginPage" class="min-h-screen bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md slide-in">
+            <div class="flex justify-center items-center gap-2 mb-6">
+                <span class="text-4xl">💰</span>
+                <h1 class="text-2xl font-bold text-gray-800">Smart Expense Buddy</h1>
+            </div>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="text-sm font-semibold text-gray-600">Username</label>
+                    <input type="text" id="loginUsername" required class="w-full mt-1 p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Enter name">
+                </div>
+                <div>
+                    <label class="text-sm font-semibold text-gray-600">Password</label>
+                    <input type="password" id="loginPassword" required class="w-full mt-1 p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="••••••••">
+                </div>
+
+                <!-- Initial Balance Setup -->
+                <div class="bg-indigo-50 p-4 rounded-xl space-y-3">
+                    <p class="text-sm font-bold text-indigo-700">💳 Set Initial Balances</p>
+                    <div>
+                        <label class="text-xs text-gray-500">Wallet Balance (₹)</label>
+                        <input type="number" id="initWallet" value="5000" class="w-full mt-1 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">Savings Balance (₹)</label>
+                        <input type="number" id="initSavings" value="15000" class="w-full mt-1 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">Monthly Budget Limit (₹)</label>
+                        <input type="number" id="initBudget" value="10000" class="w-full mt-1 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                    </div>
+                </div>
+
+                <button class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition shadow-lg">
+                    🚀 Start Tracking
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN DASHBOARD ==================== -->
+    <div id="dashboard" class="hidden min-h-screen bg-slate-50 text-gray-800 pb-12">
+
+        <!-- Navigation Bar -->
+        <nav class="bg-indigo-600 text-white px-4 md:px-6 py-4 flex justify-between items-center shadow-md">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">💰</span>
+                <h1 class="text-lg md:text-xl font-bold" id="navTitle">Smart Expense Buddy</h1>
+            </div>
+            <div class="flex items-center gap-2 md:gap-4">
+                <span id="welcomeUser" class="hidden md:block text-sm bg-indigo-700 px-3 py-1 rounded-lg"></span>
+                <select id="languageSelect" onchange="changeLanguage()" class="bg-indigo-700 text-white text-xs md:text-sm px-2 md:px-3 py-2 rounded-lg border border-indigo-500 focus:outline-none">
+                    <option value="en">🌐 English</option>
+                    <option value="hi">🌐 हिंदी</option>
+                    <option value="te">🌐 తెలుగు</option>
+                    <option value="ta">🌐 தமிழ்</option>
+                    <option value="kn">🌐 ಕನ್ನಡ</option>
+                    <option value="mr">🌐 मराठी</option>
+                    <option value="bn">🌐 বাংলা</option>
+                </select>
+                <button onclick="logout()" class="p-2 bg-indigo-700 hover:bg-red-500 rounded-lg transition" title="Logout">🚪</button>
+            </div>
+        </nav>
+
+        <main class="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+
+            <!-- Budget Warning -->
+            <div id="budgetWarning" class="hidden bg-amber-100 border-l-4 border-amber-500 text-amber-900 p-4 rounded-xl shake">
+                <p class="font-bold" id="warningTitle">⚠️ Budget Exhaustion Warning!</p>
+                <p class="text-sm" id="warningText">You have used over 80% of your monthly budget.</p>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Wallet -->
+                <div class="bg-gradient-to-br from-emerald-500 to-teal-600 text-white p-5 rounded-2xl shadow-md">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm opacity-90" id="walletLabel">💳 Wallet Balance</p>
+                            <h2 class="text-2xl font-bold">₹<span id="walletDisplay">0.00</span></h2>
+                        </div>
+                        <button onclick="openAddMoneyModal('wallet')" class="bg-white bg-opacity-20 hover:bg-opacity-40 p-2 rounded-lg transition text-sm">➕</button>
+                    </div>
+                </div>
+
+                <!-- Savings -->
+                <div class="bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-5 rounded-2xl shadow-md">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm opacity-90" id="savingsLabel">🐷 Savings Account</p>
+                            <h2 class="text-2xl font-bold">₹<span id="savingsDisplay">0.00</span></h2>
+                        </div>
+                        <button onclick="openAddMoneyModal('savings')" class="bg-white bg-opacity-20 hover:bg-opacity-40 p-2 rounded-lg transition text-sm">➕</button>
+                    </div>
+                </div>
+
+                <!-- Total Spent -->
+                <div class="bg-gradient-to-br from-rose-500 to-pink-600 text-white p-5 rounded-2xl shadow-md">
+                    <p class="text-sm opacity-90" id="spentLabel">📅 Total Spent</p>
+                    <h2 class="text-2xl font-bold">₹<span id="totalSpentDisplay">0.00</span></h2>
+                </div>
+
+                <!-- Budget Left -->
+                <div class="bg-gradient-to-br from-violet-500 to-purple-600 text-white p-5 rounded-2xl shadow-md">
+                    <p class="text-sm opacity-90" id="budgetLabel">🎯 Budget Left</p>
+                    <h2 class="text-2xl font-bold">₹<span id="budgetLeftDisplay">0.00</span></h2>
+                    <div class="w-full bg-white bg-opacity-30 rounded-full h-2 mt-2">
+                        <div id="budgetBar" class="bg-white rounded-full h-2 transition-all" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Expense Form -->
+            <div class="bg-white p-6 rounded-2xl shadow-md fade-in">
+                <h2 class="text-lg font-bold mb-4" id="addExpenseTitle">➕ Add Expense</h2>
+                <form onsubmit="addExpense(event)" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div class="relative md:col-span-2">
+                        <input type="text" id="expenseTitle" placeholder="Description" class="w-full p-3 pr-10 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none" required>
+                        <button type="button" onclick="startVoiceInput()" id="voiceBtn" class="absolute right-2 top-2.5 p-1.5 rounded-lg bg-gray-100 hover:bg-red-500 hover:text-white transition" title="Voice Input">
+                            🎤
+                        </button>
+                    </div>
+                    <input type="number" id="expenseAmount" placeholder="Amount (₹)" step="0.01" class="p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none" required>
+                    <select id="expenseCategory" class="p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none">
+                        <option value="Food">🍔 Food</option>
+                        <option value="Travel">🚌 Travel</option>
+                        <option value="Shopping">🛍️ Shopping</option>
+                        <option value="Education">📚 Education</option>
+                        <option value="Bills">🧾 Bills</option>
+                        <option value="Health">🏥 Health</option>
+                        <option value="Entertainment">🎬 Entertainment</option>
+                        <option value="Others">💡 Others</option>
+                    </select>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition" id="saveBtn">
+                        Save
+                    </button>
+                </form>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-2xl shadow-md">
+                    <h3 class="font-bold text-gray-700 mb-4" id="pieTitle">📊 Category Breakdown</h3>
+                    <div style="height: 280px;"><canvas id="pieChart"></canvas></div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-md">
+                    <h3 class="font-bold text-gray-700 mb-4" id="barTitle">📈 Weekly Spending</h3>
+                    <div style="height: 280px;"><canvas id="barChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Expense History -->
+            <div class="bg-white p-6 rounded-2xl shadow-md">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h3 class="font-bold text-gray-800 text-lg" id="historyTitle">📋 Expense History</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="clearAllExpenses()" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 text-red-600 hover:bg-red-500 hover:text-white transition">
+                            🗑️ Clear All
+                        </button>
+                    </div>
+                </div>
+                <div id="categoryFilters" class="flex flex-wrap gap-2 mb-4"></div>
+                <div id="expenseList" class="divide-y divide-gray-100"></div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ==================== ADD MONEY MODAL ==================== -->
+    <div id="addMoneyModal" class="hidden fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm slide-in">
+            <h3 class="text-lg font-bold mb-4" id="modalTitle">➕ Add Money</h3>
+            <input type="number" id="addMoneyAmount" placeholder="Enter amount (₹)" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none mb-4" required>
+            <div class="flex gap-3">
+                <button onclick="confirmAddMoney()" class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition">✅ Add</button>
+                <button onclick="closeAddMoneyModal()" class="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== DELETE CONFIRM MODAL ==================== -->
+    <div id="deleteModal" class="hidden fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm slide-in">
+            <h3 class="text-lg font-bold mb-2 text-red-600">🗑️ Delete Expense?</h3>
+            <p class="text-gray-600 mb-4" id="deleteExpenseName"></p>
+            <div class="flex gap-3">
+                <button onclick="confirmDelete()" class="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition">Yes, Delete</button>
+                <button onclick="closeDeleteModal()" class="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TOAST NOTIFICATION ==================== -->
+    <div id="toast" class="hidden fixed bottom-6 right-6 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-lg z-50 slide-in">
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+    <script>
+        // ========== GLOBAL STATE ==========
+        let wallet = 0;
+        let savings = 0;
+        let budgetLimit = 10000;
+        let expenses = [];
+        let selectedFilter = 'All';
+        let currentLang = 'en';
+        let currentUser = '';
+        let pieChart = null;
+        let barChart = null;
+        let addMoneyTarget = 'wallet';
+        let deleteTargetId = null;
+
+        const CATEGORIES = [
+            { name: 'Food', emoji: '🍔', color: '#f97316' },
+            { name: 'Travel', emoji: '🚌', color: '#3b82f6' },
+            { name: 'Shopping', emoji: '🛍️', color: '#ec4899' },
+            { name: 'Education', emoji: '📚', color: '#a855f7' },
+            { name: 'Bills', emoji: '🧾', color: '#eab308' },
+            { name: 'Health', emoji: '🏥', color: '#14b8a6' },
+            { name: 'Entertainment', emoji: '🎬', color: '#f43f5e' },
+            { name: 'Others', emoji: '💡', color: '#10b981' }
+        ];
+
+        // ========== ALL LANGUAGE TRANSLATIONS ==========
+        const TRANSLATIONS = {
+            en: {
+                navTitle: 'Smart Expense Buddy',
+                walletLabel: '💳 Wallet Balance',
+                savingsLabel: '🐷 Savings Account',
+                spentLabel: '📅 Total Spent',
+                budgetLabel: '🎯 Budget Left',
+                addExpenseTitle: '➕ Add Expense',
+                saveBtn: 'Save',
+                pieTitle: '📊 Category Breakdown',
+                barTitle: '📈 Weekly Spending',
+                historyTitle: '📋 Expense History',
+                warningTitle: '⚠️ Budget Exhaustion Warning!',
+                warningText: 'You have used over 80% of your monthly budget.',
+                modalTitleWallet: '➕ Add Money to Wallet',
+                modalTitleSavings: '➕ Add Money to Savings',
+                deleteConfirm: 'Are you sure you want to delete this expense?',
+                noExpenses: 'No expenses yet. Add your first one! 🎯',
+                clearAll: '🗑️ Clear All',
+                speechLang: 'en-IN'
+            },
+            hi: {
+                navTitle: 'स्मार्ट खर्च साथी',
+                walletLabel: '💳 वॉलेट बैलेंस',
+                savingsLabel: '🐷 बचत खाता',
+                spentLabel: '📅 कुल खर्च',
+                budgetLabel: '🎯 बजट शेष',
+                addExpenseTitle: '➕ खर्च जोड़ें',
+                saveBtn: 'सेव करें',
+                pieTitle: '📊 श्रेणी विश्लेषण',
+                barTitle: '📈 साप्ताहिक खर्च',
+                historyTitle: '📋 खर्च इतिहास',
+                warningTitle: '⚠️ बजट चेतावनी!',
+                warningText: 'आपने अपने मासिक बजट का 80% से अधिक खर्च कर दिया है।',
+                modalTitleWallet: '➕ वॉलेट में पैसे जोड़ें',
+                modalTitleSavings: '➕ बचत में पैसे जोड़ें',
+                deleteConfirm: 'क्या आप इस खर्च को हटाना चाहते हैं?',
+                noExpenses: 'अभी कोई खर्च नहीं है। पहला जोड़ें! 🎯',
+                clearAll: '🗑️ सब हटाएं',
+                speechLang: 'hi-IN'
+            },
+            te: {
+                navTitle: 'స్మార్ట్ ఖర్చుల బడ్డీ',
+                walletLabel: '💳 వాలెట్ నిల్వ',
+                savingsLabel: '🐷 పొదుపు ఖాతా',
+                spentLabel: '📅 మొత్తం ఖర్చు',
+                budgetLabel: '🎯 బడ్జెట్ మిగిలింది',
+                addExpenseTitle: '➕ ఖర్చు జోడించండి',
+                saveBtn: 'సేవ్ చేయండి',
+                pieTitle: '📊 వర్గం విశ్లేషణ',
+                barTitle: '📈 వారపు ఖర్చు',
+                historyTitle: '📋 ఖర్చుల చరిత్ర',
+                warningTitle: '⚠️ బడ్జెట్ హెచ్చరిక!',
+                warningText: 'మీరు మీ నెలవారీ బడ్జెట్‌లో 80% కంటే ఎక్కువ ఖర్చు చేశారు.',
+                modalTitleWallet: '➕ వాలెట్‌కు డబ్బు జోడించండి',
+                modalTitleSavings: '➕ పొదుపులో డబ్బు జోడించండి',
+                deleteConfirm: 'మీరు ఈ ఖర్చును తొలగించాలనుకుంటున్నారా?',
+                noExpenses: 'ఇంకా ఖర్చులు లేవు. మొదటిది జోడించండి! 🎯',
+                clearAll: '🗑️ అన్నీ తొలగించు',
+                speechLang: 'te-IN'
+            },
+            ta: {
+                navTitle: 'ஸ்மார்ட் செலவு நண்பன்',
+                walletLabel: '💳 பணப்பை இருப்பு',
+                savingsLabel: '🐷 சேமிப்பு கணக்கு',
+                spentLabel: '📅 மொத்த செலவு',
+                budgetLabel: '🎯 பட்ஜெட் மீதம்',
+                addExpenseTitle: '➕ செலவு சேர்க்கவும்',
+                saveBtn: 'சேமிக்கவும்',
+                pieTitle: '📊 வகை பகுப்பாய்வு',
+                barTitle: '📈 வாராந்திர செலவு',
+                historyTitle: '📋 செலவு வரலாறு',
+                warningTitle: '⚠️ பட்ஜெட் எச்சரிக்கை!',
+                warningText: 'உங்கள் மாதாந்திர பட்ஜெட்டின் 80% க்கும் அதிகமாக செலவழித்துவிட்டீர்கள்.',
+                modalTitleWallet: '➕ பணப்பையில் பணம் சேர்க்கவும்',
+                modalTitleSavings: '➕ சேமிப்பில் பணம் சேர்க்கவும்',
+                deleteConfirm: 'இந்த செலவை நீக்க விரும்புகிறீர்களா?',
+                noExpenses: 'இன்னும் செலவுகள் இல்லை. முதலாவதை சேர்க்கவும்! 🎯',
+                clearAll: '🗑️ அனைத்தையும் நீக்கு',
+                speechLang: 'ta-IN'
+            },
+            kn: {
+                navTitle: 'ಸ್ಮಾರ್ಟ್ ಖರ್ಚು ಸಂಗಾತಿ',
+                walletLabel: '💳 ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್',
+                savingsLabel: '🐷 ಉಳಿತಾಯ ಖಾತೆ',
+                spentLabel: '📅 ಒಟ್ಟು ಖರ್ಚು',
+                budgetLabel: '🎯 ಬಜೆಟ್ ಉಳಿದಿದೆ',
+                addExpenseTitle: '➕ ಖರ್ಚು ಸೇರಿಸಿ',
+                saveBtn: 'ಉಳಿಸಿ',
+                pieTitle: '📊 ವರ್ಗ ವಿಶ್ಲೇಷಣೆ',
+                barTitle: '📈 ವಾರದ ಖರ್ಚು',
+                historyTitle: '📋 ಖರ್ಚು ಇತಿಹಾಸ',
+                warningTitle: '⚠️ ಬಜೆಟ್ ಎಚ್ಚರಿಕೆ!',
+                warningText: 'ನಿಮ್ಮ ಮಾಸಿಕ ಬಜೆಟ್‌ನ 80% ಕ್ಕಿಂತ ಹೆಚ್ಚು ಖರ್ಚು ಮಾಡಿದ್ದೀರಿ.',
+                modalTitleWallet: '➕ ವಾಲೆಟ್‌ಗೆ ಹಣ ಸೇರಿಸಿ',
+                modalTitleSavings: '➕ ಉಳಿತಾಯಕ್ಕೆ ಹಣ ಸೇರಿಸಿ',
+                deleteConfirm: 'ಈ ಖರ್ಚನ್ನು ಅಳಿಸಲು ಬಯಸುವಿರಾ?',
+                noExpenses: 'ಇನ್ನೂ ಖರ್ಚುಗಳಿಲ್ಲ. ಮೊದಲನೆಯದನ್ನು ಸೇರಿಸಿ! 🎯',
+                clearAll: '🗑️ ಎಲ್ಲವನ್ನೂ ತೆಗೆ',
+                speechLang: 'kn-IN'
+            },
+            mr: {
+                navTitle: 'स्मार्ट खर्च मित्र',
+                walletLabel: '💳 वॉलेट शिल्लक',
+                savingsLabel: '🐷 बचत खाते',
+                spentLabel: '📅 एकूण खर्च',
+                budgetLabel: '🎯 बजेट शिल्लक',
+                addExpenseTitle: '➕ खर्च जोडा',
+                saveBtn: 'सेव्ह करा',
+                pieTitle: '📊 श्रेणी विश्लेषण',
+                barTitle: '📈 साप्ताहिक खर्च',
+                historyTitle: '📋 खर्च इतिहास',
+                warningTitle: '⚠️ बजेट चेतावणी!',
+                warningText: 'तुम्ही तुमच्या मासिक बजेटच्या 80% पेक्षा जास्त खर्च केला आहे.',
+                modalTitleWallet: '➕ वॉलेटमध्ये पैसे जोडा',
+                modalTitleSavings: '➕ बचतमध्ये पैसे जोडा',
+                deleteConfirm: 'हा खर्च हटवायचा आहे का?',
+                noExpenses: 'अजून खर्च नाहीत. पहिला जोडा! 🎯',
+                clearAll: '🗑️ सर्व हटवा',
+                speechLang: 'mr-IN'
+            },
+            bn: {
+                navTitle: 'স্মার্ট খরচ বন্ধু',
+                walletLabel: '💳 ওয়ালেট ব্যালেন্স',
+                savingsLabel: '🐷 সঞ্চয় অ্যাকাউন্ট',
+                spentLabel: '📅 মোট খরচ',
+                budgetLabel: '🎯 বাজেট বাকি',
+                addExpenseTitle: '➕ খরচ যোগ করুন',
+                saveBtn: 'সংরক্ষণ',
+                pieTitle: '📊 ক্যাটাগরি বিশ্লেষণ',
+                barTitle: '📈 সাপ্তাহিক খরচ',
+                historyTitle: '📋 খরচের ইতিহাস',
+                warningTitle: '⚠️ বাজেট সতর্কতা!',
+                warningText: 'আপনি আপনার মাসিক বাজেটের 80% এর বেশি খরচ করেছেন।',
+                modalTitleWallet: '➕ ওয়ালেটে টাকা যোগ করুন',
+                modalTitleSavings: '➕ সঞ্চয়ে টাকা যোগ করুন',
+                deleteConfirm: 'এই খরচটি মুছতে চান?',
+                noExpenses: 'এখনও কোনো খরচ নেই। প্রথমটি যোগ করুন! 🎯',
+                clearAll: '🗑️ সব মুছুন',
+                speechLang: 'bn-IN'
+            }
+        };
+
+        // ========== AUTO LOGIN CHECK ==========
+        window.onload = function () {
+            if (localStorage.getItem('loggedIn') === 'true') {
+                loadUserData();
+                showDashboard();
+            }
+        };
+
+        // ========== LOGIN ==========
+        function handleLogin(event) {
+            event.preventDefault();
+            const user = document.getElementById('loginUsername').value.trim();
+            const pass = document.getElementById('loginPassword').value.trim();
+
+            if (user && pass) {
+                currentUser = user;
+                wallet = parseFloat(document.getElementById('initWallet').value) || 5000;
+                savings = parseFloat(document.getElementById('initSavings').value) || 15000;
+                budgetLimit = parseFloat(document.getElementById('initBudget').value) || 10000;
+                expenses = [];
+
+                localStorage.setItem('loggedIn', 'true');
+                localStorage.setItem('currentUser', currentUser);
+                saveData();
+                showDashboard();
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('loggedIn');
+            location.reload();
+        }
+
+        function showDashboard() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            document.getElementById('welcomeUser').textContent = '👤 ' + currentUser;
+            renderAll();
+        }
+
+        // ========== DATA MANAGEMENT ==========
+        function saveData() {
+            localStorage.setItem('wallet', wallet);
+            localStorage.setItem('savings', savings);
+            localStorage.setItem('budgetLimit', budgetLimit);
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+        }
+
+        function loadUserData() {
+            currentUser = localStorage.getItem('currentUser') || 'User';
+            wallet = parseFloat(localStorage.getItem('wallet')) || 5000;
+            savings = parseFloat(localStorage.getItem('savings')) || 15000;
+            budgetLimit = parseFloat(localStorage.getItem('budgetLimit')) || 10000;
+            expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+        }
+
+        // ========== ADD EXPENSE ==========
+        function addExpense(event) {
+            event.preventDefault();
+            const title = document.getElementById('expenseTitle').value.trim();
+            const amount = parseFloat(document.getElementById('expenseAmount').value);
+            const category = document.getElementById('expenseCategory').value;
+
+            if (!title || !amount || amount <= 0) return;
+            if (amount > wallet) {
+                showToast('❌ Insufficient wallet balance!');
+                return;
+            }
+
+            const newExpense = {
+                id: Date.now(),
+                title,
+                amount,
+                category,
+                date: new Date().toLocaleDateString('en-IN'),
+                time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+            };
+
+            expenses.unshift(newExpense);
+            wallet -= amount;
+            saveData();
+            renderAll();
+
+            document.getElementById('expenseTitle').value = '';
+            document.getElementById('expenseAmount').value = '';
+            showToast('✅ Expense added successfully!');
+        }
+
+        // ========== DELETE EXPENSE ==========
+        function openDeleteModal(id) {
+            deleteTargetId = id;
+            const expense = expenses.find(e => e.id === id);
+            document.getElementById('deleteExpenseName').textContent =
+                `"${expense.title}" — ₹${expense.amount.toFixed(2)}`;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
+            deleteTargetId = null;
+        }
+
+        function confirmDelete() {
+            if (deleteTargetId !== null) {
+                const expense = expenses.find(e => e.id === deleteTargetId);
+                if (expense) {
+                    wallet += expense.amount;
+                    expenses = expenses.filter(e => e.id !== deleteTargetId);
+                    saveData();
+                    renderAll();
+                    showToast('🗑️ Expense deleted! Amount refunded to wallet.');
+                }
+            }
+            closeDeleteModal();
+        }
+
+        function clearAllExpenses() {
+            if (expenses.length === 0) return;
+            const totalRefund = expenses.reduce((sum, e) => sum + e.amount, 0);
+            wallet += totalRefund;
+            expenses = [];
+            saveData();
+            renderAll();
+            showToast('🗑️ All expenses cleared! ₹' + totalRefund.toFixed(2) + ' refunded.');
+        }
+
+        // ========== ADD MONEY MODAL ==========
+        function openAddMoneyModal(target) {
+            addMoneyTarget = target;
+            const t = TRANSLATIONS[currentLang];
+            document.getElementById('modalTitle').textContent =
+                target === 'wallet' ? t.modalTitleWallet : t.modalTitleSavings;
+            document.getElementById('addMoneyAmount').value = '';
+            document.getElementById('addMoneyModal').classList.remove('hidden');
+        }
+
+        function closeAddMoneyModal() {
+            document.getElementById('addMoneyModal').classList.add('hidden');
+        }
+
+        function confirmAddMoney() {
+            const amount = parseFloat(document.getElementById('addMoneyAmount').value);
+            if (!amount || amount <= 0) return;
+
+            if (addMoneyTarget === 'wallet') {
+                wallet += amount;
+                showToast('✅ ₹' + amount.toFixed(2) + ' added to Wallet!');
+            } else {
+                savings += amount;
+                showToast('✅ ₹' + amount.toFixed(2) + ' added to Savings!');
+            }
+
+            saveData();
+            renderAll();
+            closeAddMoneyModal();
+        }
+
+        // ========== VOICE INPUT ==========
+        function startVoiceInput() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                showToast('❌ Voice input not supported. Use Chrome!');
+                return;
+            }
+            const recognition = new SpeechRecognition();
+            const t = TRANSLATIONS[currentLang];
+            recognition.lang = t.speechLang;
+            const btn = document.getElementById('voiceBtn');
+            btn.style.background = '#ef4444';
+            btn.style.color = 'white';
+            btn.textContent = '⏺️';
+            recognition.start();
+            showToast('🎤 Listening... Speak now!');
+
+            recognition.onresult = (event) => {
+                document.getElementById('expenseTitle').value = event.results[0][0].transcript;
+                btn.style.background = '#f3f4f6';
+                btn.style.color = 'black';
+                btn.textContent = '🎤';
+                showToast('✅ Voice captured!');
+            };
+            recognition.onerror = recognition.onend = () => {
+                btn.style.background = '#f3f4f6';
+                btn.style.color = 'black';
+                btn.textContent = '🎤';
+            };
+        }
+
+        // ========== LANGUAGE CHANGE ==========
+        function changeLanguage() {
+            currentLang = document.getElementById('languageSelect').value;
+            updateUITexts();
+        }
+
+        function updateUITexts() {
+            const t = TRANSLATIONS[currentLang];
+            document.getElementById('navTitle').textContent = t.navTitle;
+            document.getElementById('walletLabel').textContent = t.walletLabel;
+            document.getElementById('savingsLabel').textContent = t.savingsLabel;
+            document.getElementById('spentLabel').textContent = t.spentLabel;
+            document.getElementById('budgetLabel').textContent = t.budgetLabel;
+            document.getElementById('addExpenseTitle').textContent = t.addExpenseTitle;
+            document.getElementById('saveBtn').textContent = t.saveBtn;
+            document.getElementById('pieTitle').textContent = t.pieTitle;
+            document.getElementById('barTitle').textContent = t.barTitle;
+            document.getElementById('historyTitle').textContent = t.historyTitle;
+            document.getElementById('warningTitle').textContent = t.warningTitle;
+            document.getElementById('warningText').textContent = t.warningText;
+        }
+
+        // ========== TOAST NOTIFICATION ==========
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        // ========== RENDER EVERYTHING ==========
+        function renderAll() {
+            const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+            const budgetLeft = budgetLimit - totalSpent;
+            const budgetPercent = Math.max(0, (budgetLeft / budgetLimit) * 100);
+
+            document.getElementById('walletDisplay').textContent = wallet.toFixed(2);
+            document.getElementById('savingsDisplay').textContent = savings.toFixed(2);
+            document.getElementById('totalSpentDisplay').textContent = totalSpent.toFixed(2);
+            document.getElementById('budgetLeftDisplay').textContent = Math.max(0, budgetLeft).toFixed(2);
+            document.getElementById('budgetBar').style.width = budgetPercent + '%';
+
+            // Budget warning
+            const showWarning = totalSpent >= budgetLimit * 0.8;
+            document.getElementById('budgetWarning').classList.toggle('hidden', !showWarning);
+
+            updateUITexts();
+            renderFilters();
+            renderExpenses();
+            renderCharts();
+        }
+
+        function renderFilters() {
+            const container = document.getElementById('categoryFilters');
+            container.innerHTML = '';
+            const allFilters = [{ name: 'All', emoji: '📌' }, ...CATEGORIES];
+            allFilters.forEach(cat => {
+                const btn = document.createElement('button');
+                const isActive = selectedFilter === cat.name;
+                btn.className = `px-3 py-1.5 rounded-full text-xs font-semibold transition ${isActive ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`;
+                btn.textContent = `${cat.emoji} ${cat.name}`;
+                btn.onclick = () => { selectedFilter = cat.name; renderAll(); };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderExpenses() {
+            const list = document.getElementById('expenseList');
+            const filtered = expenses.filter(e => selectedFilter === 'All' || e.category === selectedFilter);
+            const t = TRANSLATIONS[currentLang];
+
+            if (filtered.length === 0) {
+                list.innerHTML = `<p class="text-gray-400 text-center py-8">${t.noExpenses}</p>`;
+                return;
+            }
+
+            list.innerHTML = filtered.map(exp => {
+                const cat = CATEGORIES.find(c => c.name === exp.category);
+                return `
+                    <div class="py-3 flex justify-between items-center hover:bg-slate-50 px-3 rounded-lg transition fade-in">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl p-2 bg-gray-100 rounded-xl">${cat?.emoji || '💡'}</span>
+                            <div>
+                                <p class="font-bold text-gray-800">${exp.title}</p>
+                                <span class="text-xs text-gray-400">${exp.date} ${exp.time || ''} • ${exp.category}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold text-rose-500 text-lg">- ₹${exp.amount.toFixed(2)}</span>
+                            <button onclick="openDeleteModal(${exp.id})" class="p-2 bg-red-50 hover:bg-red-500 hover:text-white text-red-400 rounded-lg transition text-sm" title="Delete">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderCharts() {
+            const categoryTotals = CATEGORIES.map(cat =>
+                expenses.filter(e => e.category === cat.name).reduce((sum, e) => sum + e.amount, 0)
+            );
+            const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+            // Destroy old charts
+            if (pieChart) pieChart.destroy();
+            if (barChart) barChart.destroy();
+
+            // Pie Chart
+            pieChart = new Chart(document.getElementById('pieChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: CATEGORIES.map(c => `${c.emoji} ${c.name}`),
+                    datasets: [{
+                        data: categoryTotals,
+                        backgroundColor: CATEGORIES.map(c => c.color),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+                }
+            });
+
+            // Bar Chart - Weekly breakdown
+            const weekData = [0, 0, 0, 0];
+            expenses.forEach(e => {
+                const day = new Date().getDate();
+                if (day <= 7) weekData[0] += e.amount;
+                else if (day <= 14) weekData[1] += e.amount;
+                else if (day <= 21) weekData[2] += e.amount;
+                else weekData[3] += e.amount;
+            });
+
+            barChart = new Chart(document.getElementById('barChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                    datasets: [{
+                        label: 'Spending (₹)',
+                        data: weekData,
+                        backgroundColor: ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd'],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
